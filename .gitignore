@@ -1,0 +1,4 @@
+/venv/
+/.venv/
+_.ipynb 
+**/__pycache__/
