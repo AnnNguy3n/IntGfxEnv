@@ -44,6 +44,7 @@ sprites = Sprites()
 class Params:
     def __init__(self) -> None:
         self.font28 = ImageFont.FreeTypeFont("ImageFonts/arial.ttf", 28)
+        self.font32 = ImageFont.FreeTypeFont("ImageFonts/arial.ttf", 32)
         self.font40 = ImageFont.FreeTypeFont("ImageFonts/arial.ttf", 40)
 params = Params()
 
@@ -104,6 +105,12 @@ def get_state_image(state=None):
             b = i // 4
             bg.paste(sprites.cards[nm_cards[i]],
                     (1310+160*a, 270+200*b), sprites.cards[nm_cards[i]])
+            text = str(nm_cards[i])
+            if len(text) == 1:
+                text = "0" + text
+
+            draw_outlined_text(draw, text, params.font32, (1390+160*a, 405+200*b), (0, 0, 0), 1)
+
 
     for i in range(3):
         card = state[168+11*i:179+11*i]
@@ -115,6 +122,11 @@ def get_state_image(state=None):
             bg.paste(sprites.cards[card_id],
                      (360+140*i, 690),
                      sprites.cards[card_id])
+            text = str(card_id)
+            if len(text) == 1:
+                text = "0" + text
+
+            draw_outlined_text(draw, text, params.font32, (440+140*i, 825), (0, 0, 0), 1)
 
     for p in range(3):
         temp = []
@@ -183,29 +195,11 @@ def get_description(action):
 
     if action < 95:
         card_id = action - 5
-        card_infor = __NORMAL_CARD__[card_id]
-        score = int(card_infor[0])
-        vv = np.where(card_infor[1:6] == 1)[0][0]
-        price = card_infor[6:11].astype(np.int64)
-        temp = []
-        for i in range(5):
-            if price[i] != 0:
-                temp.append(f"{price[i]}-{GEMS[i]}")
-
-        return f"Buy card, score: {score}, bonus: {GEMS[vv]}, price: {temp}"
+        return f"Buy card, id: {card_id}"
 
     if action < 185:
         card_id = action - 95
-        card_infor = __NORMAL_CARD__[card_id]
-        score = int(card_infor[0])
-        vv = np.where(card_infor[1:6] == 1)[0][0]
-        price = card_infor[6:11].astype(np.int64)
-        temp = []
-        for i in range(5):
-            if price[i] != 0:
-                temp.append(f"{price[i]}-{GEMS[i]}")
-
-        return f"Hold card, score: {score}, bonus: {GEMS[vv]}, price: {temp}"
+        return f"Hold card, id: {card_id}"
 
     if action < 190:
         return f"Discard one {GEMS[action-185]}"

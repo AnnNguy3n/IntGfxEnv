@@ -365,7 +365,7 @@ def stepEnv(action, env, lv1, lv2, lv3):
     else:
         env[83] += 1
 
-    if (takenStocks==0).all() and (pPerStocks>=3).all():
+    if (takenStocks==0).all() and (pPerStocks>=3).any():
         pos_nobles = np.full(5, 0)
         for i in range(5):
             nobleId = env[6+i]
