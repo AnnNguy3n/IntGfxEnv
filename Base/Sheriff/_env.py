@@ -1,6 +1,8 @@
 import numpy as np
 from numba import  njit
 from Base.Sheriff.index import*
+# from index import*
+
 
 @njit()
 def getActionSize():
@@ -31,7 +33,7 @@ def initEnv():
     for id in range(NUMBER_PLAYER):
         player_i = START_PLAYER.copy()
         if id == 0:
-            player_i[2] = 1
+            player_i[2] = 1 
             card_player = player_i[-15:]
             for card in normal_card[id*5:(id+1)*5]:
                 card_player[card-1] += 1
@@ -189,7 +191,7 @@ def getValidActions(player_state_origin):
 
     elif phase_env == 11:
         list_action_return[np.array([80, 81])] = 1
-
+    
     return list_action_return
 
 @njit()
@@ -212,7 +214,7 @@ def stepEnv(env_state, action):
         else:
             env_state[ENV_PHASE] = 2
 
-    elif phase_env == 2:
+    elif phase_env == 2: 
         if action == 16:
             player_card = player_in4[-15:]
             # print('check', player_card)
@@ -227,7 +229,7 @@ def stepEnv(env_state, action):
             player_in4[-15:] = player_card
             env_state[ATTRIBUTE_PLAYER * id_action : ATTRIBUTE_PLAYER * (id_action + 1)] = player_in4
             env_state[ENV_PHASE] = 3
-        else:
+        else: 
             player_card = player_in4[-15:]
             card_up = env_state[ENV_LEFT_CARD + NUMBER_CARD_OPEN * (action - 17) : ENV_LEFT_CARD + NUMBER_CARD_OPEN*(action-16)]
             card_get = card_up[0]
@@ -289,11 +291,11 @@ def stepEnv(env_state, action):
             env_state[ENV_PHASE] = 6
 
     elif phase_env == 6:
-        player_checked = action-40
+        player_checked = action-40 
         env_state[ENV_ID_ACTION] = (env_state[ENV_ID_ACTION] + player_checked)%4
         env_state[ENV_NUMBER_CHECKED] += 1
         env_state[ENV_PHASE] = 7
-        env_state[ENV_LAST_CHECKED + int(env_state[ENV_ID_ACTION])] = 1
+        env_state[ENV_LAST_CHECKED + int(env_state[ENV_ID_ACTION])] = 1  
 
     elif phase_env == 7:
         if action == 45:
@@ -390,9 +392,15 @@ def stepEnv(env_state, action):
             else:
                 env_state[ENV_LAST_CHECKED : ENV_LAST_CHECKED + NUMBER_PLAYER] = 0
                 if env_state[ENV_NUMBER_CHECKED] == 3:
+                    old_sheriff = int((env_state[ENV_ROUND] - 1)%4)
+                    env_state[ATTRIBUTE_PLAYER * old_sheriff + 2] = 0       #hủy tư cách sheriff
                     env_state[ENV_PHASE] = 1
                     env_state[ENV_ID_ACTION] = (env_state[ENV_ROUND])%4
+
                     env_state[ENV_ROUND] += 1
+                    new_sheriff = int((env_state[ENV_ROUND] - 1)%4)
+                    env_state[ATTRIBUTE_PLAYER * new_sheriff + 2] = 1       #gán tư cách sheriff
+
                     if env_state[ENV_ID_ACTION] == (env_state[ENV_ROUND]-1)%4:
                         env_state[ENV_ID_ACTION] = (env_state[ENV_ID_ACTION] + 1)%4
                     env_state[ENV_NUMBER_CHECKED] = 0
@@ -424,8 +432,16 @@ def stepEnv(env_state, action):
             if env_state[ENV_NUMBER_CHECKED] == 3:
                 env_state[ENV_TEMP_DROP : ENV_TEMP_DROP + NUMBER_TYPE_CARD * NUMBER_PLAYER] = 0 #reset thẻ drop trong lượt
                 env_state[ENV_PHASE] = 1
+
+                old_sheriff = int((env_state[ENV_ROUND] - 1)%4)
+                env_state[ATTRIBUTE_PLAYER * old_sheriff + 2] = 0       #hủy tư cách sheriff
+
                 env_state[ENV_ID_ACTION] = (env_state[ENV_ROUND])%4
                 env_state[ENV_ROUND] += 1
+
+                new_sheriff = int((env_state[ENV_ROUND] - 1)%4)
+                env_state[ATTRIBUTE_PLAYER * new_sheriff + 2] = 1       #gán tư cách sheriff
+                    
                 if env_state[ENV_ID_ACTION] == (env_state[ENV_ROUND]-1)%4:
                     env_state[ENV_ID_ACTION] = (env_state[ENV_ID_ACTION] + 1)%4
                 env_state[ENV_NUMBER_CHECKED] = 0
@@ -448,8 +464,17 @@ def stepEnv(env_state, action):
         env_state[ENV_LAST_CHECKED : ENV_LAST_CHECKED + NUMBER_PLAYER] = 0
         if env_state[ENV_NUMBER_CHECKED] == 3:
             env_state[ENV_PHASE] = 1
+            # print('check phase 11')
+
+            old_sheriff = int((env_state[ENV_ROUND] - 1)%4)
+            env_state[ATTRIBUTE_PLAYER * old_sheriff + 2] = 0       #hủy tư cách sheriff
+
             env_state[ENV_ID_ACTION] = (env_state[ENV_ROUND])%4
             env_state[ENV_ROUND] += 1
+            
+            new_sheriff = int((env_state[ENV_ROUND] - 1)%4)
+            env_state[ATTRIBUTE_PLAYER * new_sheriff + 2] = 1       #gán tư cách sheriff
+
             if env_state[ENV_ID_ACTION] == (env_state[ENV_ROUND]-1)%4:
                 env_state[ENV_ID_ACTION] = (env_state[ENV_ID_ACTION] + 1)%4
             env_state[ENV_NUMBER_CHECKED] = 0
@@ -465,7 +490,7 @@ def check_winner(env_state):
     #mảng đếm hàng hóa buôn thành công của người chơi
     all_done_card = np.zeros(60)
     all_player_coin = np.array([env_state[ATTRIBUTE_PLAYER * id + P_COIN] - env_state[ATTRIBUTE_PLAYER * id + P_DEBT]  for id in range(4)])
-
+    
     for id_player in range(4):
         player_i = env_state[ATTRIBUTE_PLAYER * id_player : ATTRIBUTE_PLAYER * (id_player + 1)]
         player_i_done = player_i[-75:-60]       #thẻ hàng hóa buôn thành công của người chơi
@@ -476,7 +501,7 @@ def check_winner(env_state):
         all_number_type_card[id_player] = all_done_card_i[0] + all_done_card_i[8] + all_done_card_i[12]
         all_number_type_card[id_player+4] = all_done_card_i[1] + all_done_card_i[9] + all_done_card_i[13]
         all_number_type_card[id_player+8] = all_done_card_i[2] + all_done_card_i[10] + all_done_card_i[14]
-        all_number_type_card[id_player+12] = all_done_card_i[3] + all_done_card_i[11]
+        all_number_type_card[id_player+12] = all_done_card_i[3] + all_done_card_i[11] 
     reward_King = np.array([20, 15, 15, 10])
     reward_Queen = np.array([10, 10, 10, 5])
     for type_i in range(4):
@@ -556,8 +581,8 @@ def getReward(player_state):
             if id_player == 0:
                 player_i = player_state[:P_OTHER_PLAYER_IN4]
                 player_i_done = player_i[-75:-60]       #thẻ hàng hóa buôn thành công của người chơi
-
-            else:
+                
+            else: 
                 player_i_done = player_state[P_OTHER_PLAYER_DONE_CARD + NUMBER_TYPE_CARD * (id_player - 1) : P_OTHER_PLAYER_DONE_CARD + NUMBER_TYPE_CARD * id_player]
             all_done_card[15*id_player:15*(id_player+1)] = player_i_done
             all_player_coin[id_player] = all_player_coin[id_player] + np.sum(np.multiply(player_i_done, ALL_REWARD))
@@ -566,7 +591,7 @@ def getReward(player_state):
             all_number_type_card[id_player] = all_done_card_i[0] + all_done_card_i[8] + all_done_card_i[12]
             all_number_type_card[id_player+4] = all_done_card_i[1] + all_done_card_i[9] + all_done_card_i[13]
             all_number_type_card[id_player+8] = all_done_card_i[2] + all_done_card_i[10] + all_done_card_i[14]
-            all_number_type_card[id_player+12] = all_done_card_i[3] + all_done_card_i[11]
+            all_number_type_card[id_player+12] = all_done_card_i[3] + all_done_card_i[11] 
         reward_King = np.array([20, 15, 15, 10])
         reward_Queen = np.array([10, 10, 10, 5])
         for type_i in range(4):
@@ -654,6 +679,8 @@ def one_game_numba(p0, list_other, per_player, per1, per2, per3, p1, p2, p3):
     env_state = initEnv()
     count_turn = 0
     while system_check_end(env_state) and count_turn < 1000:
+        # police_check = env_state[2:305:100]
+        # print(police_check)
         idx = int(env_state[ENV_ID_ACTION])
         player_state = getAgentState(env_state)
         if list_other[idx] == -1:
@@ -665,7 +692,7 @@ def one_game_numba(p0, list_other, per_player, per1, per2, per3, p1, p2, p3):
         elif list_other[idx] == 2:
             action, per2 = p2(player_state,per2)
         elif list_other[idx] == 3:
-            action, per3 = p3(player_state,per3)
+            action, per3 = p3(player_state,per3) 
         else:
             raise Exception('Sai list_other.')
         env_state = stepEnv(env_state, action)
@@ -685,7 +712,7 @@ def one_game_numba(p0, list_other, per_player, per1, per2, per3, p1, p2, p3):
         elif list_other[idx] == 2:
             action, per2 = p2(player_state,per2)
         elif list_other[idx] == 3:
-            action, per3 = p3(player_state,per3)
+            action, per3 = p3(player_state,per3) 
         else:
             raise Exception('Sai list_other.')
 
@@ -712,7 +739,7 @@ def one_game_normal(p0, list_other, per_player, per1, per2, per3, p1, p2, p3):
         elif list_other[idx] == 2:
             action, per2 = p2(player_state,per2)
         elif list_other[idx] == 3:
-            action, per3 = p3(player_state,per3)
+            action, per3 = p3(player_state,per3) 
         else:
             raise Exception('Sai list_other.')
         env_state = stepEnv(env_state, action)
@@ -731,7 +758,7 @@ def one_game_normal(p0, list_other, per_player, per1, per2, per3, p1, p2, p3):
         elif list_other[idx] == 2:
             action, per2 = p2(player_state,per2)
         elif list_other[idx] == 3:
-            action, per3 = p3(player_state,per3)
+            action, per3 = p3(player_state,per3) 
         else:
             raise Exception('Sai list_other.')
 
