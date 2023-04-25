@@ -10,7 +10,7 @@ class Sprites:
     def __init__(self) -> None:
         self.background = Image.open(IMG_PATH+"background.png").resize((2100, 900))
         self._background_ = self.background.copy()
-        self.sheriff = Image.open(IMG_PATH+"sheriff.webp").resize((100, 130)).convert("RGBA")
+        self.sheriff = Image.open(IMG_PATH+"sheriff.png").resize((100, 130)).convert("RGBA")
         self.cards = {}
         card_names = os.listdir(IMG_PATH)
         for name in card_names:
