@@ -96,12 +96,12 @@ def get_state_image(state=None):
             for i in range(15):
                 text = str(temp[i])
                 bbox = draw.textbbox((0, 0), text, params.font28)
-                draw_outlined_text(draw, text, params.font28, (s_0+110*i+90-bbox[2], 600+35*(p-1)), (255, 255, 255), 1)
+                draw_outlined_text(draw, text, params.font28, (s_0+110*i+85-bbox[2], 600+35*(p-1)), (255, 255, 255), 1)
 
             temp = state[410+15*p:425+15*p].astype(int)
             for i in range(15):
                 text = str(temp[i])
-                draw_outlined_text(draw, text, params.font28, (s_0+110*i+10, 600+35*(p-1)), (255, 255, 255), 1)
+                draw_outlined_text(draw, text, params.font28, (s_0+110*i+15, 600+35*(p-1)), (255, 255, 255), 1)
 
             temp = state[125+29*(p-1):129+29*(p-1)].astype(int)
             for i in range(4):
@@ -112,10 +112,10 @@ def get_state_image(state=None):
         inf_0 = state[10+30*k:25+30*k].astype(int)
         inf_1 = state[25+30*k:40+30*k].astype(int)
         for i in range(15):
-            draw_outlined_text(draw, str(inf_0[i]), params.font28, (s_0+110*i+10, 775+35*k), (255, 255, 255), 1)
+            draw_outlined_text(draw, str(inf_0[i]), params.font28, (s_0+110*i+15, 775+35*k), (255, 255, 255), 1)
             text = str(inf_1[i])
             bbox = draw.textbbox((0, 0), text, params.font28)
-            draw_outlined_text(draw, text, params.font28, (s_0+110*i+90-bbox[2], 775+35*k), (255, 255, 255), 1)
+            draw_outlined_text(draw, text, params.font28, (s_0+110*i+85-bbox[2], 775+35*k), (255, 255, 255), 1)
 
     temp = state[367:382].astype(int)
     for i in range(15):
