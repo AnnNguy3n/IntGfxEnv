@@ -113,7 +113,7 @@ def get_state_image(state=None):
         elif a[0] == 9:
             text = "Five kinds of card"
         else:
-            text = -1
+            text = str(a[0])
 
         if text != -1:
             bbox = draw.textbbox((0, 0), text, params.font32)
