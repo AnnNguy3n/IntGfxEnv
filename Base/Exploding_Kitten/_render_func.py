@@ -21,7 +21,7 @@ class Sprites:
         self.card_back = Image.open(IMG_PATH+"Cardback.png").resize((120, 168)).convert("RGBA")
         self.cards = []
         for name in params.card_order:
-            self.cards.append(Image.open(IMG_PATH+f"{name}.jpeg").resize((120, 168)).convert("RGBA"))
+            self.cards.append(Image.open(IMG_PATH+f"{name}.png").resize((120, 168)).convert("RGBA"))
 sprites = Sprites()
 
 
