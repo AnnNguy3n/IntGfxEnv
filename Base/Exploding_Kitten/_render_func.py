@@ -3,7 +3,6 @@ import numpy as np
 from setup import SHORT_PATH
 from Base.Exploding_Kitten import _env
 IMG_PATH = SHORT_PATH + "Base/Exploding_Kitten/images/"
-import os
 
 
 class Params:
@@ -11,6 +10,7 @@ class Params:
         self.card_order = ["Nope", "Attack", "Skip", "Favor", "Shuffle", "Future", "Taco", "Rainbow", "Beard", "Potato", "Melon", "Defuse", "Exploding"]
         self.font32 = ImageFont.FreeTypeFont("ImageFonts/arial.ttf", 32)
         self.font24 = ImageFont.FreeTypeFont("ImageFonts/arial.ttf", 24)
+        self.coords = [(50, 430), (50, 30), (1930, 30), (1930, 430)]
 params = Params()
 
 
@@ -60,29 +60,13 @@ def get_state_image(state=None):
 
     # Draw pile
     text = str(int(state[25]))
-    draw_outlined_text(draw, text, params.font32, (1763, 535), (255, 255, 255), 1)
-
-    # Nope
-    if state[27] == 1:
-        bg.paste(sprites.cards[0], (1060, 400))
-
-    # See the future
-    temp = []
-    for i in range(3):
-        try:
-            temp.append(np.where(state[28+13*i:41+13*i] == 1)[0][0])
-        except:
-            pass
-
-    w_ = len(temp)*140 - 20
-    s_ = 1470 - w_ // 2
-    for i in range(len(temp)):
-        bg.paste(sprites.cards[temp[i]], (s_+140*i, 400))
+    bbox = draw.textbbox((0, 0), text, params.font32)
+    draw_outlined_text(draw, text, params.font32, (1050-bbox[2]//2, 260), (255, 255, 255), 1)
 
     # Have to draw
     text = str(int(state[71]))
     bbox = draw.textbbox((0, 0), text, params.font32)
-    draw_outlined_text(draw, text, params.font32, (840-bbox[2]//2, 450), (255, 255, 255), 1)
+    draw_outlined_text(draw, text, params.font32, (1050-bbox[2]//2, 300), (0, 0, 0), 1)
 
     # Others
     for i in range(4):
@@ -95,34 +79,70 @@ def get_state_image(state=None):
             font = params.font32
             b_h = 0
 
-        draw_outlined_text(draw, text, font, (153+140*i, 535+b_h), (255, 255, 255), 1)
+        bbox = draw.textbbox((0, 0), text, font)
+        draw_outlined_text(draw, text, font, (params.coords[i][0]+60-bbox[2]//2, params.coords[i][1]+130+b_h), (255, 255, 255), 1)
 
-    #
+    # Last action
+    a = np.where(state[72:82] == 1)[0]
+    if len(a) ==1 :
+        last_action = a[0]
+        if last_action < 6:
+            bg.paste(sprites.cards[last_action], (520, 130))
+        else:
+            if last_action == 6:
+                text = "Draw card"
+            elif last_action == 7:
+                text = "Double"
+            elif last_action == 8:
+                text = "Triple"
+            elif last_action == 9:
+                text = "5 kinds of cards"
+            else:
+                text = ""
+
+            bbox = draw.textbbox((0, 0), text, params.font32)
+            draw_outlined_text(draw, text, params.font32, (580-bbox[2]//2, 180), (0, 0, 0), 1)
+
+    # Exploded
     if state[86] == 0:
         text = "Exploded"
         bbox = draw.textbbox((0, 0), text, params.font32)
         draw_outlined_text(draw, text, params.font32, (1050-bbox[2]//2, 600), (0, 0, 0), 1)
 
-    # Related previous action
-    a = np.where(state[72:82] == 1)[0]
-    if len(a) > 0:
-        if a[0] == 3:
-            text = "Double card"
-        elif a[0] == 8:
-            text = "Triple card"
-        elif a[0] == 9:
-            text = "Five kinds of card"
-        else:
-            text = str(a[0])
+    # See the future
+    temp = []
+    for i in range(3):
+        try:
+            temp.append(np.where(state[28+13*i:41+13*i] == 1)[0][0])
+        except:
+            pass
 
-        if text != -1:
-            bbox = draw.textbbox((0, 0), text, params.font32)
-            draw_outlined_text(draw, text, params.font32, (1050-bbox[2]//2, 150), (0, 0, 0), 1)
+    w_ = len(temp)*140 - 20
+    s_ = 1520 - w_ // 2
+    for i in range(len(temp)):
+        bg.paste(sprites.cards[temp[i]], (s_+140*i, 130))
+
+    # Nope
+    if state[27] == 1:
+        text = "Nope"
+        bbox = draw.textbbox((0, 0), text, params.font32)
+        draw_outlined_text(draw, text, params.font32, (580-bbox[2]//2, 300), (0, 0, 0), 1)
+
+    # Cards have been discarded
+    temp = []
+    for i in range(11):
+        for k in range(int(state[91+i])):
+            temp.append(i)
+
+    w_ = len(temp)*140 - 20
+    s_ = 1050 - w_ // 2
+    for i in range(len(temp)):
+        bg.paste(sprites.cards[temp[i]], (s_+140*i, 380))
 
     return bg
 
 
-action_annotations = ["Nope", "Attack", "Skip", "Favor", "Shuffle", "See the future", "Draw card", "Play doublecard", "Play triplecard", "Play five kinds of card", "Yup"] + [f"Choose player {i+1} to rob" for i in range(4)] + [f'Choose "{params.card_order[i]}"-card to give' for i in range(12)] + [f'Ask about "{params.card_order[i]}"-card' for i in range(12)] + [f'Choose "{params.card_order[i]}"-card from Discard pile' for i in range(12)]
+action_annotations = ["Nope", "Attack", "Skip", "Favor", "Shuffle", "See the future", "Draw card", "Play doublecard", "Play triplecard", "Play five kinds of card", "Yup"] + [f"Choose player {i+1} to rob" for i in range(4)] + [f'Choose "{params.card_order[i]}"-card to give' for i in range(12)] + [f'Ask about "{params.card_order[i]}"-card' for i in range(12)] + [f'Choose "{params.card_order[i]}"-card from Discard pile' for i in range(12)] + [f'Discard "{params.card_order[i]}"-card' for i in range(11)]
 
 def get_description(action):
     if action < 0 or action >= _env.getActionSize():
@@ -190,8 +210,10 @@ def get_main_player_state(env_components: Env_components, list_agent, list_data,
         win = -1
     else:
         env = env_components.env.copy()
+        env[67] = 0
         my_idx = np.where(env_components.list_other == -1)[0][0]
         env[57] = my_idx
+        env[58:62] = _env.nopeTurn(env[57])
         state = _env.getAgentState(env, env_components.draw, env_components.discard)
         if _env.checkEnded(env) == my_idx:
             win = 1
@@ -200,6 +222,7 @@ def get_main_player_state(env_components: Env_components, list_agent, list_data,
 
         for pIdx in range(5):
             env[57] = pIdx
+            env[58:62] = _env.nopeTurn(env[57])
             if pIdx != my_idx:
                 _state = _env.getAgentState(env, env_components.draw, env_components.discard)
                 agent = list_agent[env_components.list_other[pIdx]-1]

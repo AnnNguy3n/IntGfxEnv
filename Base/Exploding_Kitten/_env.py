@@ -1,18 +1,18 @@
 import numpy as np
-from numba import jit,njit
+from numba import njit
 import numba
 from numba.typed import List
 import sys
 @njit
 def getActionSize():
-    return 51
+    return 62
 @njit
 def getStateSize():
-    return 91
+    return 103
 @njit
 def initEnv():
     """init env"""
-    env = np.zeros(75)
+    env = np.zeros(87)
     card = np.arange(46) #card except Defuse and Explo kitten
     np.random.shuffle(card)
     env[:56] += 5 # 5 is card on draw pile
@@ -29,13 +29,15 @@ def initEnv():
     env[57] = 0 # track player id main turn
     env[58:62] = [2,3,4,0] # track player id Nope turn
     env[62:67] = 1 # 0 if lose else 1
-    env[67] = 0 #phase [0:main turn, 1:nope turn,2:steal card turn,3:choose/take card turn]
+    env[67] = 0 #phase [0:main turn, 1:nope turn,2:steal card turn,3:choose/take card turn, 4: discard turn]
     env[68] = 1 # number of card player env[57] have to draw
     env[69:72] = [-1,-1,-1] #three card in see the future
     env[72] = -1 # player env[57] last action
-    env[73] = env[57]+1
+    env[73] = env[57]+1 #player id in nope turn
     env[74] = -1 #player chosen in phase 2
 
+    env[75] = 1 #num card main player have to discard
+    env[76:87] = 0
     return env,draw_pile,discard_pile
 
 
@@ -72,6 +74,7 @@ def getCardType(idx):
 def getCardRange(type_card):
     """Get the range of the card given type"""
     cards = List([np.arange(0.,5.),np.arange(5.,9.),np.arange(9.,13.),np.arange(13.,17.),np.arange(17.,21.),np.arange(21.,26.),np.arange(26.,30.),np.arange(30.,34.),np.arange(34.,38.),np.arange(38.,42.),np.arange(42.,46.),np.arange(46.,52.),np.arange(52.,56.)])
+
     return cards[type_card].astype(np.int64)[0],cards[type_card].astype(np.int64)[-1]+1
 
 @njit
@@ -93,36 +96,38 @@ def getAgentState(env,draw_pile,discard_pile):
             pIdx = int(env[74])
         else:
             pIdx = int(main_id)
-    if env[67]==1: #nope turn
-        state[0:12] = getAllNumCard(env,env[73])
-        state[12:25] = discard_pile #discard pile
-        state[25] = np.where(draw_pile!=-1)[0].shape[0] #number of card in draw pile
-        state[26] = np.where(env[62:67]==1)[0].shape[0]
-        state[67:71][int(env[67])] = 1 #phase
-        if env[72]>=0:
-            state[72:82][int(env[72])] = 1# player main t
-        nope_turn = nopeTurn(env[73])
+    elif phase==4:
+        pIdx = int(main_id)
+    state[0:12] = getAllNumCard(env,pIdx)
+    state[12:25] = discard_pile #discard pile
+    state[25] = np.where(draw_pile!=-1)[0].shape[0] #number of card in draw pile
+    state[26] = np.where(env[62:67]==1)[0].shape[0]
+    if phase!=4: #not discard turn
+        state[67:71][int(phase)] = 1 #phase
+
+    if last_action>=0:
+            state[72:82][int(last_action)] = 1# player main turn last action
+
+    for i in range(4):#number of card other people have
+            state[87+i] = np.where(env[0:56]==env[58+i])[0].shape[0]
+
+    if phase==1: #nope turn
+        nope_turn = nopeTurn(nope_id)
         for i in range(4):
             state[82+i] = env[62:67][int(nope_turn[i])]
-        state[86] = env[62:67][int(env[73])] #lose or not
+        state[86] = env[62:67][int(nope_id)] #lose or not
 
-    elif env[67]==3 and env[72]==3: #choose / take card turn, action favor
-        state[0:12] = getAllNumCard(env,env[74])
-        state[12:25] = discard_pile #discard pile
-        state[25] = np.where(draw_pile!=-1)[0].shape[0] #number of card in draw pile
-        state[26] = np.where(env[62:67]==1)[0].shape[0]
-        state[67:71][int(env[67])] = 1 #phase
-        if env[72]>=0:
-            state[72:82][int(env[72])] = 1# player main turn last action
+    elif phase==3 and last_action==3: #choose / take card turn, action favor
+
         nope_turn = nopeTurn(env[74])
         for i in range(4):
             state[82+i] = env[62:67][int(nope_turn[i])]
         state[86] = env[62:67][int(env[74])] #lose or not
+
     else:
-        state[0:12] = getAllNumCard(env,env[57])
-        state[12:25] = discard_pile #discard pile
-        state[25] = np.where(draw_pile!=-1)[0].shape[0] #number of card in draw pile
-        state[26] = np.where(env[62:67]==1)[0].shape[0]
+        if phase==4: #discard phase
+            state[91:102] = env[76:87] #card have been discard (5 combo)
+            state[102] = env[75] # num card left have to discard
         state[27] = env[56]%2 #1 if action been Nope else 0
         if pIdx == int(main_id):
             for i in range(3):
@@ -130,20 +135,19 @@ def getAgentState(env,draw_pile,discard_pile):
                     card = np.zeros(13)
                     card[int(getCardType(env[69+i]))] = 1
                     state[28+13*i:41+13*i] = card# three card if use see the future
-        state[67:71][int(env[67])] = 1 #phase
         state[71] = env[68] # number of card player have to draw
-        if env[72]>=0:
-            state[72:82][int(env[72])] = 1# player main turn last action
+
         for i in range(4):
             state[82+i] = env[62:67][int(env[58+i])]
         state[86] = env[62:67][int(env[57])] #lose or not
-        for i in range(4):
-            state[87+i] = np.where(env[0:56]==env[58+i])[0].shape[0]
+
+
     return state
 
 @njit
 def getValidActions(state):
     list_action = np.zeros(getActionSize())
+    available_card = (state[0:11]>0).astype(np.float64)
     if state[67]==1:#main turn
         list_action[1:6] = (state[1:6]>0).astype(np.float64)
         if np.sum(state[87:91])==0:
@@ -153,10 +157,11 @@ def getValidActions(state):
             list_action[7] = True
         if np.max(state[0:11])>=3 and np.sum(state[87:91])>0:#three of a kind
             list_action[8] = True
-        type_card = (state[0:11]>0).astype(np.float64)
-        if np.sum(type_card)>=5:#five of a kind
-            list_action[9] = True
 
+        if np.sum(available_card)>=5:#five of a kind
+            list_action[9] = True
+        if np.sum(list_action)==0:
+            list_action[10] = 1
     elif state[68]==1: #Nope turn
         if state[0]>0:
             list_action[0] = 1 #Nope
@@ -177,8 +182,20 @@ def getValidActions(state):
             list_action[27:39] = 1
         elif main_action==9:
             list_action[39:51] = 1
-    if np.sum(list_action)==0:
-        list_action[10] = 1
+
+    elif sum(state[67:71])==0: #discard turn
+        last_action = np.argmax(state[72:82])
+        if last_action == 7:
+            available_card = (state[0:11] >= 2).astype(np.float64)
+            list_action[51:62] = available_card
+        elif last_action == 8:
+            available_card = (state[0:11] >= 3).astype(np.float64)
+            list_action[51:62] = available_card
+        elif last_action ==9:
+            list_action[51:62] = available_card - state[91:102]
+
+    # if np.sum(list_action)==0:
+    #     list_action[10] = 1
     return list_action
 
 
@@ -190,7 +207,7 @@ def checkDefuse(env,discard_pile): # get the Defuse (if player have else -1)
         card_id = card[0]
         env[46:52][card_id] = 6
         discard_pile[11]+=1
-        #print('Player ',env[57],' have Defuse!')
+        # print('Player ',env[57],' have Defuse!')
         return True
     return False
 
@@ -198,7 +215,7 @@ def checkDefuse(env,discard_pile): # get the Defuse (if player have else -1)
 def checkExploding(card): # check if that card is expode or not
     explode = np.array([52,53,54,55],dtype=np.float64)
     if card in explode:
-        #print('PLayer draw an Exploding kitten!')
+        # print('PLayer draw an Exploding kitten!')
         return True
     return False
 @njit
@@ -225,10 +242,10 @@ def changeTurn(env,num_card_draw=1):
 @njit
 def drawCard(env,draw_pile,discard_pile):
     """Draw card"""
-    #print('Player ',env[57],' draw ', env[68],'card(s)')
+    # print('Player ',env[57],' draw ', env[68],'card(s)')
     for i in range(int(env[68])):
         index_draw = np.where(draw_pile!=-1)[0][0]
-        #print(f'Draw : {draw_pile[index_draw]}')
+        # print(f'Phase: {env[67]} Player {env[57]} Draw : {visualCard(np.array([draw_pile[index_draw]]))}')
         if checkExploding(draw_pile[index_draw]):#draw an exploding kitten
             if checkDefuse(env,discard_pile):#player have defuse
                 idx = np.random.randint(index_draw,draw_pile.shape[0])
@@ -240,7 +257,7 @@ def drawCard(env,draw_pile,discard_pile):
                 draw_pile = draw_pile_2
                 #insert explode card back to the Draw Pile
             else:#player lost
-                #print('Player ',env[57],' loss!')
+                # print('Player ',env[57],' loss!')
                 env[62:67][int(env[57])] = 0
                 env[0:56][np.where(env[0:56]==env[57])] = 6
                 env[52:56][np.where(env[52:56]!=6)] = 6
@@ -268,43 +285,65 @@ def checkIfNope(env):
 @njit
 def executeMainAction(env,draw_pile,discard_pile,action):
     """Execute main action if it has not been Nope"""
-    #print('Execute main Action!')
+    # print('Execute main Action!')
     env[56] = 0
     if action==1: #Attack
-        #print(f'Player {env[57]} attack!')
+        # print(f'Phase: {env[67]} Player {env[57]} attack!')
         env[67] = 0
         env = changeTurn(env,num_card_draw=2) #change main turn, next player draw 2 card
     elif action==2: #Skip
-        #print(f'Player {env[57]} skip!')
+        # print(f'Phase: {env[67]} Player {env[57]} skip!')
         env[68]-=1
         env[67] = 0
         if env[68]==0:
             env = changeTurn(env,num_card_draw=1)
     elif action==3:
-        #print(f'Player {env[57]} use favor!')
+        # print(f'Phase: {env[67]} Player {env[57]} use favor!')
         env[67] = 2
     elif action==4: #Shuffle
-        #print(f'Player {env[57]} shuffle!')
+        # print(f'Phase: {env[67]} Player {env[57]} shuffle!')
         np.random.shuffle(draw_pile)
         env[67] = 0
         env[69:72] = -1 #reset future card
     elif action==5: #See the future
-        #print(f'Player {env[57]} see the future!')
+        # print(f'Phase: {env[67]} Player {env[57]} see the future!')
         if np.where(draw_pile!=-1)[0].shape[0]>=3:
             env[69:72] = draw_pile[np.where(draw_pile!=-1)[0][0:3]]
         else:
             env[69:72] = np.concatenate((draw_pile[np.where(draw_pile!=-1)[0][0:3]],np.zeros(3-np.where(draw_pile!=-1)[0].shape[0])-1))
         env[67] = 0
     elif action==7:
-        #print(f'Player {env[57]} use two of a kind!')
+        # print(f'Phase: {env[67]} Player {env[57]} use two of a kind!')
         env[67] = 2
     elif action==8:
-        #print(f'Player {env[57]} use three of a kind!')
+        # print(f'Phase: {env[67]} Player {env[57]} use three of a kind!')
         env[67] = 2
     elif action==9:
-        #print(f'Player {env[57]} use five different cards!')
+        # print(f'Phase: {env[67]} Player {env[57]} use five different cards!')
         env[67] = 3
     return env,draw_pile,discard_pile
+
+
+@njit
+def idPlayerCanUseNope(env,nope_id):
+    """return the id of the player that have the nope card, else -1"""
+    main_id = env[57]
+    nope_turn = nopeTurn(main_id)
+    idx_old = -1
+    for i in range(getAgentSize()-1):
+        if nope_turn[i] == nope_id:
+            idx_old = i
+            break
+    else:
+        idx_old = -1
+    if idx_old+1==getAgentSize()-1:
+        return main_id
+    else:
+        for i in range(idx_old+1,getAgentSize()-1):
+            idx = nope_turn[i]
+            if np.where(env[0:5]==idx)[0].shape[0]>=1 and env[62:67][int(idx)] == 1:
+                return idx
+        return main_id
 
 @njit
 def discardCardNormalAction(env,last_action,discard_pile):
@@ -326,89 +365,6 @@ def discardCardNormalAction(env,last_action,discard_pile):
     elif last_action==5: #See the future
         env[21:26][np.where(env[21:26]==env[57])[0][0]] = 6
         discard_pile[5]+=1
-
-@njit
-def discardCardSpecialAction(env,last_action,discard_pile):
-    """Discard card after using special action"""
-    all_num_card = getAllNumCard(env,env[57])[:11]
-    if last_action==7: # two of a kind
-        if np.max(all_num_card[6:11])>=2:
-            if 2. in all_num_card[6:11]:
-                type_card = np.where(all_num_card[6:11]==2)[0][0]+6
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])] = 6
-                discard_pile[int(type_card)]+=2
-            else:
-                type_card = np.random.choice(np.where(all_num_card[6:11]>=2)[0])+6
-                for i in range(2):
-                    env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])[0][0]] = 6
-                    discard_pile[int(type_card)]+=1
-        else:
-            type_card = np.random.choice(np.where(all_num_card[0:6]>=2)[0])
-            for i in range(2):
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])[0][0]] = 6
-                discard_pile[int(type_card)]+=1
-
-    elif last_action==8:
-        if np.max(all_num_card[6:11])>=3:
-            if 3 in all_num_card[6:11]:
-                type_card = np.where(all_num_card[6:11]==3)[0][0]+6
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])] = 6
-                discard_pile[int(type_card)]+=3
-            else:
-                type_card = np.random.choice(np.where(all_num_card[6:11]>=3)[0])+6
-                for i in range(3):
-                    env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])[0][0]] = 6
-                    discard_pile[int(type_card)]+=1
-        else:
-            type_card = np.random.choice(np.where(all_num_card[0:6]>=3)[0])
-            for i in range(3):
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])[0][0]] = 6
-                discard_pile[int(type_card)]+=1
-    elif last_action==9:
-        if np.sum((all_num_card[6:11]>0).astype(np.float64))==5:
-            for i in range(5):
-                type_card = 6+i
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])[0][0]] = 6
-                discard_pile[int(type_card)]+=1
-        else:
-            num_spec = 5 - np.sum((all_num_card[6:11]>0).astype(np.float64))
-            normal_card = np.where(all_num_card[6:11]>0)[0]+6
-            special_card = np.where(all_num_card[0:6]>0)[0]
-            for n in normal_card:
-                type_card = n
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])[0][0]] = 6
-                discard_pile[int(type_card)]+=1
-            if num_spec<5:
-                for i in range(int(num_spec)):
-                    np.random.shuffle(special_card)
-                    type_card = special_card[0]
-                    env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[57])[0][0]] = 6
-                    special_card = special_card[1:]
-                    discard_pile[int(type_card)]+=1
-
-    return env,discard_pile
-
-@njit
-def idPlayerCanUseNope(env,nope_id):
-    """return the id of the player that have the nope card, else -1"""
-    main_id = env[57]
-    nope_turn = nopeTurn(main_id)
-    idx_old = -1
-    for i in range(4):
-        if nope_turn[i] == nope_id:
-            idx_old = i
-            break
-    else:
-        idx_old = -1
-    if idx_old+1==4:
-        return main_id
-    else:
-        for i in range(idx_old+1,4):
-            idx = nope_turn[i]
-            if np.where(env[0:5]==idx)[0].shape[0]>=1 and env[62:67][int(idx)] == 1:
-                return idx
-        return main_id
-
 @njit
 def stepEnv(env,draw_pile,discard_pile,action):
     phase = env[67]
@@ -419,23 +375,33 @@ def stepEnv(env,draw_pile,discard_pile,action):
     if phase==0: #Phase 0: Main Turn
         if action==6: #draw card
             env,draw_pile,discard_pile = drawCard(env,draw_pile,discard_pile)
+            # print(f'Phase {phase} Player {main_id} end turn!')
         else:
             env[72] = action
-            if env[72]<=5:
-                discardCardNormalAction(env,env[72],discard_pile)
-            elif env[72]>=7:
-                discardCardSpecialAction(env,env[72],discard_pile)
+            # print(f'Phase {phase} Player {main_id} choose action {action}')
+            if env[72]>=7 and env[72]<=9:
 
-            env[73] = idPlayerCanUseNope(env,main_id)
-            if env[73]==main_id:
-                env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
-                #print(f'Action {env[72]} has been executed!')
-            else:
-                env[67] = 1 #change to Nope phase
+                env[67] = 4 #change to discard phase
+                if env[72]==7:
+                    env[75] = 2
+                elif env[72] == 8:
+                    env[75] = 3
+                elif env[72] == 9:
+                    env[75] = 5
+            elif env[72] >=0 and env[72] < 7:
+                discardCardNormalAction(env,env[72],discard_pile)
+                env[76:87] = 0
+                env[73] = idPlayerCanUseNope(env,main_id)
+                if env[73]==main_id:
+                    env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
+                    # print(f'Phase: {0} Action {action} has been executed!')
+                    # # print('ok')
+                else:
+                    env[67] = 1 #nope phase
     elif phase==1:#Phase 1: Nope phase
 
         if action==0 and env[73]!=main_id: #other player use Nope
-            # print(f'Player {env[73]} use Nope!')
+            # print(f'Phase: {env[67]} Player {env[73]} use Nope!')
             env[56]+=1 # increase Nope Count
             env[0:5][np.where(env[0:5]==env[73])[0][0]] = 6
             discard_pile[0]+=1
@@ -443,18 +409,19 @@ def stepEnv(env,draw_pile,discard_pile,action):
             if env[73]==main_id:
                 if not checkIfNope(env): #if not been Nope
                     env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
+                    # print(f'Phase: {0} Action {env[72]} has been executed!')
 
         elif action==0 and env[73]==main_id:
                 env[56]+=1 # increase Nope Count
                 env[0:5][np.where(env[0:5]==env[57])[0][0]] = 6
                 if not checkIfNope(env): #if not been Nope
                     env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
-                    # print(f'Action {env[72]} has been executed!')
-        else:
+                    # print(f'Phase: {0} Action {last_action} has been executed! ')
+        elif action==10:
             if env[73]==main_id:
                 if not checkIfNope(env): #if not been Nope
                     env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
-                    # print(f'Action {env[72]} has been executed!')
+                    # print(f'Phase: {0} Action {last_action} has been executed! ')
                 else: # if Nope
                     if action==0:
                         # print('Main player use Yup!')
@@ -464,12 +431,13 @@ def stepEnv(env,draw_pile,discard_pile,action):
                         env[73] = idPlayerCanUseNope(env,env[73])
                         if env[73]==main_id:
                             env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
-                            # print(f'Action {env[72]} has been executed!')
+                            # print(f'Phase: {0} Action {last_action} has been executed! ')
                     else:
-                        # print(f'Action {env[72]} has been Nope!')
+                        # print(f'Phase: {env[67]} Action {last_action} has been Nope!')
                         env[72] = -1# action has been Nope
                         env[67] = 0 # back to phase 0
                         env[73] = idPlayerCanUseNope(env,main_id)
+                        env[56] = 0 #reset nope count
             # env[73] = idPlayerCanUseNope(env,env[73])
             else:
                 env[73] = idPlayerCanUseNope(env,env[73])
@@ -477,7 +445,7 @@ def stepEnv(env,draw_pile,discard_pile,action):
                     if not checkIfNope(env): #if not been Nope
                         env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
 
-                        # print(f'Action {env[72]} has been executed!')
+                        # # print(f'Phase: {0} Action {env[72]} has been executed! ok3')
 
     elif phase==2:# phase 2: choose player to steal card. Only main_id can enter this phase
         if action==6:
@@ -485,7 +453,7 @@ def stepEnv(env,draw_pile,discard_pile,action):
         else:
             env[74] = env[58:62][int(action-11)]
             last_action = env[72]
-            #print(f'Player {env[57]} choose player {env[74]} to steal!')
+            # print(f'Phase: {env[67]} Player {env[57]} choose player {env[74]} to steal!')
             if last_action==7:
                 card_on_player_chosen = np.where(env[0:56]==env[74])[0]
                 card = np.random.choice(card_on_player_chosen)
@@ -500,23 +468,63 @@ def stepEnv(env,draw_pile,discard_pile,action):
         last_action = env[72]
         if last_action==3:
             type_card = action - 15
-            all_card_to_take = np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[74])[0]
-            env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][int(all_card_to_take[0])] = env[57]
+            low,high = getCardRange(type_card) #range
+            all_card_to_take = np.where(env[low:high]==env[74])[0]
+            env[low:high][int(all_card_to_take[0])] = env[57]
 
 
         elif last_action==8:
             #take card
             type_card = action - 27
-            all_card_to_take = np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==env[74])[0]
+            low,high = getCardRange(type_card) #range
+            all_card_to_take = np.where(env[low:high]==env[74])[0]
             if all_card_to_take.shape[0]>0:
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][int(all_card_to_take[0])] = env[57]
+                env[low:high][int(all_card_to_take[0])] = env[57]
             #used card go to Discard Pile
         elif last_action==9:
             type_card = action - 39
-            if np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==6)[0].shape[0]>0:
-                env[getCardRange(type_card)[0]:getCardRange(type_card)[1]][np.where(env[getCardRange(type_card)[0]:getCardRange(type_card)[1]]==6)[0][0]] = env[57]
+            low,high = getCardRange(type_card) #range
+            if np.where(env[low:high]==6)[0].shape[0]>0:
+                env[low:high][np.where(env[low:high]==6)[0][0]] = env[57]
         env[72] = -1
         env[67] = 0
+
+    elif phase==4:
+        all_num_card = getAllNumCard(env,main_id)[:11]
+        type_card = action - 51
+        # try:
+        #     # print(f'Phase: {env[67]} Card {visualCard(np.array([low]))} has been discarded!')
+        # except:
+        #     # print(type_card)
+        #     raise NameError
+        low,high = getCardRange(type_card) #range
+        if last_action==9:
+            env[low:high][np.where(env[low:high]==main_id)[0][0]] = 6
+            discard_pile[int(type_card)]+=1
+            env[76:87][int(type_card)] = 1
+            # print(env[76:87])
+            env[75] -= 1
+        else:
+            if last_action==7:
+                for i in range(2):
+                    env[low:high][np.where(env[low:high]==env[57])[0][0]] = 6
+                    discard_pile[int(type_card)]+=1
+
+            elif last_action==8:
+                for i in range(3):
+                    env[low:high][np.where(env[low:high]==env[57])[0][0]] = 6
+                    discard_pile[int(type_card)]+=1
+            env[75] = 0
+
+        if env[75] == 0:
+            env[76:87] = 0
+            env[73] = idPlayerCanUseNope(env,main_id)
+            if env[73]==main_id:
+                env,draw_pile,discard_pile = executeMainAction(env,draw_pile,discard_pile,env[72])
+                # print(f'Phase: {0} Action {last_action} has been executed!')
+                # # print('ok')
+            else:
+                env[67] = 1 #nope phase
     return env,draw_pile,discard_pile
 @njit
 def getAgentSize():
@@ -540,17 +548,18 @@ def visualCard(card):
     arr = []
     lst = ['Nope','Attack','Skip','Favor','Shuffle','See the future','TCT','RRC','BC','HPC','CTM','Defuse','Exploding Kitten']
     for i in card:
-        arr.append(lst[int(getCardType(i))])
+        if i!=-1:
+            arr.append(lst[int(getCardType(i))])
     return arr
 
 @njit
 def random_player1(state,per):
     list_action  = np.where(getValidActions(state)==1)[0]
     action = np.random.choice(list_action)
-    #print(state[82:86],state[87:91])
+    # print(state[82:86],state[87:91])
     if getReward(state) != -1:
         per += 1
-    print(getReward(state))
+    # print(getReward(state))
     return action,per
 # @njit
 def random_player(state,per):
@@ -581,6 +590,8 @@ def one_game_numba(p0,pIdOrder,per_player,per1,per2,per3,per4,p1,p2,p3,p4):
                 pIdx = int(env[74])
             else:
                 pIdx = int(main_id)
+        elif phase==4:
+            pIdx = int(main_id)
         if pIdOrder[pIdx] == -1:
             action, per_player = p0(getAgentState(env,draw_pile,discard_pile), per_player)
         elif pIdOrder[pIdx] == 1:
@@ -591,14 +602,15 @@ def one_game_numba(p0,pIdOrder,per_player,per1,per2,per3,per4,p1,p2,p3,p4):
             action, per3 = p3(getAgentState(env,draw_pile,discard_pile), per3)
         elif pIdOrder[pIdx] == 4:
             action, per4 = p4(getAgentState(env,draw_pile,discard_pile), per4)
-        env,draw_pile,discard_pile = stepEnv(env,draw_pile,discard_pile,action)
 
+        env,draw_pile,discard_pile = stepEnv(env,draw_pile,discard_pile,action)
         winner = checkEnded(env)
         if winner != -1 or turn>500:
             break
-
+    env[67] = 0
     for pIdx in range(5):
         env[57] = pIdx
+        env[58:62] = nopeTurn(env[57])
         if pIdOrder[pIdx] == -1:
             if pIdOrder[pIdx] == -1:
                 action, per_player = p0(getAgentState(env,draw_pile,discard_pile), per_player)
@@ -627,20 +639,10 @@ def n_game_numba(p0, num_game, per_player, list_other, per1, per2, per3, per4, p
     return win, per_player
 
 import importlib.util, json, sys
-try:
-    from setup import SHORT_PATH
-except:
-    pass
+from setup import SHORT_PATH
 
-def load_module_player(player, game_name = None):
-    if game_name == None:
-        spec = importlib.util.spec_from_file_location('Agent_player', f"{SHORT_PATH}Agent/{player}/Agent_player.py")
-    else:
-        spec = importlib.util.spec_from_file_location('Agent_player', f"{SHORT_PATH}Agent/ifelse/{game_name}/{player}.py")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+def load_module_player(player):
+    return  importlib.util.spec_from_file_location('Agent_player', f"{SHORT_PATH}Agent/{player}/Agent_player.py").loader.load_module()
 
 @njit()
 def random_Env(p_state, per):
@@ -682,6 +684,9 @@ def one_game_normal(p0,pIdOrder,per_player,per1,per2,per3,per4,p1,p2,p3,p4):
                 pIdx = int(env[74])
             else:
                 pIdx = int(main_id)
+        elif phase==4:
+            pIdx = int(main_id)
+
         if pIdOrder[pIdx] == -1:
             action, per_player = p0(getAgentState(env,draw_pile,discard_pile), per_player)
         elif pIdOrder[pIdx] == 1:
@@ -692,14 +697,24 @@ def one_game_normal(p0,pIdOrder,per_player,per1,per2,per3,per4,p1,p2,p3,p4):
             action, per3 = p3(getAgentState(env,draw_pile,discard_pile), per3)
         elif pIdOrder[pIdx] == 4:
             action, per4 = p4(getAgentState(env,draw_pile,discard_pile), per4)
+        # print(f'Nope count: {env[56]}')
+        # print(f'Player {pIdx} Valid Action: {np.where(getValidActions(getAgentState(env,draw_pile,discard_pile))==1)[0]}')
+        # print(f'Turn {turn}, Phase {int(phase)} Player {pIdx} action {action} List player {env[62:67]}' )
+        # print(f'See the future: {visualCard(env[69:72])}')
+        # print()
         env,draw_pile,discard_pile = stepEnv(env,draw_pile,discard_pile,action)
+        # print(f'Draw pile: {visualCard(draw_pile)}')
+        # print("____________________________________________________")
+        # print()
 
         winner = checkEnded(env)
         if winner != -1 or turn>500:
+            # print(f'Winner: {winner}')
             break
-
+    env[67] = 0
     for pIdx in range(5):
         env[57] = pIdx
+        env[58:62] = nopeTurn(env[57])
         if pIdOrder[pIdx] == -1:
             if pIdOrder[pIdx] == -1:
                 action, per_player = p0(getAgentState(env,draw_pile,discard_pile), per_player)
@@ -716,6 +731,14 @@ def one_game_normal(p0,pIdOrder,per_player,per1,per2,per3,per4,p1,p2,p3,p4):
         win = True
     else:
         win = False
+    return win, per_player
+
+def n_game_normal(p0, num_game, per_player, list_other, per1, per2, per3, per4, p1, p2, p3, p4):
+    win = 0
+    for _n in range(num_game):
+        np.random.shuffle(list_other)
+        winner,per_player  = one_game_normal(p0, list_other, per_player, per1, per2, per3, per4, p1, p2, p3, p4)
+        win += winner
     return win, per_player
 
 def load_agent(level, *args):
@@ -759,14 +782,6 @@ def load_agent(level, *args):
                 _list_bot_level_.append(lst_module_level[i].Test)
 
     return _list_bot_level_, _list_per_level_
-
-def n_game_normal(p0, num_game, per_player, list_other, per1, per2, per3, per4, p1, p2, p3, p4):
-    win = 0
-    for _n in range(num_game):
-        np.random.shuffle(list_other)
-        winner,per_player  = one_game_normal(p0, list_other, per_player, per1, per2, per3, per4, p1, p2, p3, p4)
-        win += winner
-    return win, per_player
 
 def numba_main_2(p0, num_game, per_player, level, *args):
     num_bot = getAgentSize() - 1
